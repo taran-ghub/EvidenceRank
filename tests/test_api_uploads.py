@@ -141,3 +141,108 @@ def test_upload_config_rejects_invalid_values(
 ) -> None:
     with pytest.raises(ValueError):
         UploadConfig(**invalid_config)
+class DeterministicEmbeddingModel:
+    def encode(self, texts, **kwargs):
+        import numpy as np
+
+        vectors = []
+
+        for text in texts:
+            normalized = text.casefold()
+            vector = np.asarray(
+                [
+                    float("python" in normalized),
+                    float("rest api" in normalized),
+                    float("docker" in normalized),
+                    1.0,
+                ],
+                dtype=float,
+            )
+            vector /= np.linalg.norm(vector)
+            vectors.append(vector)
+
+        return np.asarray(vectors)
+
+
+def test_rank_endpoint_processes_and_orders_candidates(
+    monkeypatch,
+) -> None:
+    import src.matcher as matcher_module
+
+    monkeypatch.setattr(
+        matcher_module,
+        "get_embedding_model",
+        lambda: DeterministicEmbeddingModel(),
+    )
+
+    job_description = b"""
+MUST-HAVE SKILLS
+Python
+REST APIs
+
+GOOD-TO-HAVE SKILLS
+Docker
+"""
+
+    matching_resume = b"""
+AARAV SHARMA
+Backend Developer
+
+SKILLS
+Python, Git
+
+PROJECTS
+Built REST APIs and backend services using Python.
+"""
+
+    unrelated_resume = b"""
+RIYA KAPOOR
+Visual Designer
+
+SKILLS
+Figma, Adobe Illustrator
+
+PROJECTS
+Designed marketing graphics and mobile interface mockups.
+"""
+
+    response = client.post(
+        "/rank",
+        files=[
+            (
+                "job_description",
+                ("job.txt", BytesIO(job_description), "text/plain"),
+            ),
+            (
+                "resumes",
+                ("matching.txt", BytesIO(matching_resume), "text/plain"),
+            ),
+            (
+                "resumes",
+                ("unrelated.txt", BytesIO(unrelated_resume), "text/plain"),
+            ),
+        ],
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["status"] == "completed"
+    assert payload["summary"] == {
+        "uploaded_resumes": 2,
+        "ranked_resumes": 2,
+        "rejected_resumes": 0,
+    }
+    assert payload["job_description"]["requirement_count"] >= 2
+    assert len(payload["rankings"]) == 2
+
+    first_candidate = payload["rankings"][0]
+    second_candidate = payload["rankings"][1]
+
+    assert first_candidate["filename"] == "matching.txt"
+    assert first_candidate["rank"] == 1
+    assert second_candidate["filename"] == "unrelated.txt"
+    assert second_candidate["rank"] == 2
+    assert first_candidate["final_score"] > second_candidate["final_score"]
+    assert first_candidate["requirement_matches"]
