@@ -312,3 +312,67 @@ def test_candidate_score_is_invariant_to_unrelated_pool_changes(monkeypatch) -> 
     ).match_requirement(requirement)["candidate_a"].combined_score
 
     assert score_alone == score_with_other_candidate
+def test_candidate_without_matchable_spans_is_returned_as_missing(
+    monkeypatch,
+) -> None:
+    import src.matcher as matcher_module
+    from src.schemas import EvidenceSpan
+
+    monkeypatch.setattr(
+        matcher_module,
+        "get_embedding_model",
+        lambda: DummyEmbeddingModel(),
+    )
+
+    valid_candidate = NormalizedDocument(
+        filename="valid_candidate.pdf",
+        spans=[
+            make_span(
+                "valid_1",
+                "Built backend services using Python",
+            )
+        ],
+        total_spans=1,
+        normalization_success=True,
+    )
+
+    header_only_candidate = NormalizedDocument(
+        filename="header_only_candidate.pdf",
+        spans=[
+            EvidenceSpan(
+                span_id="header_1",
+                filename="header_only_candidate.pdf",
+                page_number=1,
+                section="header",
+                original_text="AARAV SHARMA",
+                normalized_text="aarav sharma",
+                word_count=2,
+            )
+        ],
+        total_spans=1,
+        normalization_success=True,
+    )
+
+    requirement = JobRequirement(
+        requirement_id="req_python",
+        original_text="Experience building services using Python",
+        normalized_text="experience building services using python",
+        canonical_label="Python",
+        priority="required",
+        category="technical_skill",
+        weight=1.5,
+        exact_terms=["python"],
+        related_terms=[],
+        evidence_expected="project",
+    )
+
+    results = matcher_module.HybridMatcher(
+        {
+            "valid": valid_candidate,
+            "header_only": header_only_candidate,
+        }
+    ).match_requirement(requirement)
+
+    assert results["valid"].best_evidence is not None
+    assert results["header_only"].status == "missing"
+    assert results["header_only"].best_evidence is None

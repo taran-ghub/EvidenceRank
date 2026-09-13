@@ -268,8 +268,11 @@ class HybridMatcher:
                 )
             )
 
+            candidate_bm25 = self.candidate_bm25.get(candidate_id)
             raw_candidate_bm25 = np.asarray(
-                self.candidate_bm25[candidate_id].get_scores(keyword_query),
+                candidate_bm25.get_scores(keyword_query)
+                if candidate_bm25 is not None
+                else [],
                 dtype=float,
             )
             # Fixed saturation keeps values in [0, 1) without normalizing
