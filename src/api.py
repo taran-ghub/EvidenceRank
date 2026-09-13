@@ -84,6 +84,12 @@ async def save_upload(upload: UploadFile, destination: Path) -> None:
                     )
 
                 output_file.write(chunk)
+
+        if total_size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{upload.filename or 'Uploaded file'} is empty.",
+            )
     finally:
         await upload.close()
 
