@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.config import UPLOAD_CONFIG
 from src.document_extractor import extract_document
 from src.jd_parser import parse_job_description
 from src.matcher import HybridMatcher
@@ -13,9 +15,12 @@ from src.normalizer import normalize_document
 from src.scorer import score_and_rank_candidates
 
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".xml"}
-MAX_RESUMES = 50
-MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB per file
+# Backwards-compatible names used by tests and API metadata.
+ALLOWED_EXTENSIONS = UPLOAD_CONFIG.allowed_extensions
+MAX_RESUMES = UPLOAD_CONFIG.max_resumes
+MAX_FILE_SIZE = UPLOAD_CONFIG.max_file_size_bytes
+
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -47,7 +52,24 @@ def validate_filename(filename: str | None) -> str:
             detail="An uploaded file has no filename.",
         )
 
-    safe_name = Path(filename).name
+    # Normalize Windows and POSIX separators on every operating system.
+    safe_name = Path(filename.replace("\\", "/")).name.strip()
+
+    if not safe_name or safe_name in {".", ".."}:
+        raise HTTPException(
+            status_code=400,
+            detail="An uploaded file has an invalid filename.",
+        )
+
+    if len(safe_name) > UPLOAD_CONFIG.max_filename_length:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "An uploaded filename is too long. "
+                f"The maximum is {UPLOAD_CONFIG.max_filename_length} characters."
+            ),
+        )
+
     extension = Path(safe_name).suffix.lower()
 
     if extension not in ALLOWED_EXTENSIONS:
@@ -70,7 +92,9 @@ async def save_upload(upload: UploadFile, destination: Path) -> None:
     try:
         with destination.open("wb") as output_file:
             while True:
-                chunk = await upload.read(1024 * 1024)
+                chunk = await upload.read(
+                    UPLOAD_CONFIG.read_chunk_size_bytes
+                )
 
                 if not chunk:
                     break
@@ -80,10 +104,19 @@ async def save_upload(upload: UploadFile, destination: Path) -> None:
                 if total_size > MAX_FILE_SIZE:
                     raise HTTPException(
                         status_code=413,
-                        detail=f"{upload.filename} is larger than 15 MB.",
+                        detail=(
+                            f"{upload.filename} is larger than "
+                            f"{UPLOAD_CONFIG.max_file_size_mb} MB."
+                        ),
                     )
 
                 output_file.write(chunk)
+
+        if total_size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{upload.filename or 'Uploaded file'} is empty.",
+            )
     finally:
         await upload.close()
 
@@ -153,11 +186,15 @@ async def rank_resumes(
 
         try:
             extracted_job = extract_document(job_path)
-        except Exception as exc:
+        except Exception:
+            logger.exception(
+                "Job-description extraction crashed for %s.",
+                job_filename,
+            )
             raise HTTPException(
                 status_code=422,
-                detail=f"Could not read the job description: {exc}",
-            ) from exc
+                detail="Could not read the job description.",
+            ) from None
 
         if not extracted_job.extraction_success:
             raise HTTPException(
@@ -170,11 +207,15 @@ async def rank_resumes(
 
         try:
             parsed_job = parse_job_description(extracted_job)
-        except Exception as exc:
+        except Exception:
+            logger.exception(
+                "Job-description parsing crashed for %s.",
+                job_filename,
+            )
             raise HTTPException(
                 status_code=422,
-                detail=f"Could not parse the job description: {exc}",
-            ) from exc
+                detail="Could not parse the job description.",
+            ) from None
 
         if not parsed_job.parsing_success:
             raise HTTPException(
@@ -268,13 +309,18 @@ async def rank_resumes(
             except HTTPException:
                 raise
 
-            except Exception as exc:
+            except Exception:
+                logger.exception(
+                    "Resume processing crashed for candidate %s (%s).",
+                    candidate_id,
+                    original_filename,
+                )
                 rejected_files.append(
                     {
                         "candidate_id": candidate_id,
                         "filename": original_filename,
                         "stage": "processing",
-                        "reason": str(exc),
+                        "reason": "Unexpected resume processing failure.",
                         "warnings": [],
                     }
                 )
@@ -295,11 +341,12 @@ async def rank_resumes(
         try:
             matcher = HybridMatcher(candidates)
             matches = matcher.match_all(parsed_job)
-        except Exception as exc:
+        except Exception:
+            logger.exception("Candidate matching crashed.")
             raise HTTPException(
                 status_code=500,
-                detail=f"Candidate matching failed: {exc}",
-            ) from exc
+                detail="Candidate matching failed.",
+            ) from None
 
         # ---------------------------------------------------------
         # 4. Score and rank candidates
@@ -311,11 +358,12 @@ async def rank_resumes(
                 parsed_job,
                 matches,
             )
-        except Exception as exc:
+        except Exception:
+            logger.exception("Candidate scoring crashed.")
             raise HTTPException(
                 status_code=500,
-                detail=f"Candidate scoring failed: {exc}",
-            ) from exc
+                detail="Candidate scoring failed.",
+            ) from None
 
         # ---------------------------------------------------------
         # 5. Build explainable results

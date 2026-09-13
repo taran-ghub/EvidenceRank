@@ -7,6 +7,7 @@ from src.schemas import (
     ParsedJobDescription,
     RequirementMatch,
 )
+from src.config import SCORING_CONFIG, ScoringConfig
 
 
 def weighted_average(
@@ -75,6 +76,7 @@ def score_candidate(
     document: NormalizedDocument,
     job_description: ParsedJobDescription,
     matches: list[RequirementMatch],
+    config: ScoringConfig = SCORING_CONFIG,
 ) -> CandidateEvaluation:
     matches_by_id = {
         match.requirement_id: match
@@ -155,12 +157,14 @@ def score_candidate(
     # outrank a candidate who satisfies more must-have requirements.
     if required_count:
         raw_score = (
-            required_coverage * 70
-            + preferred_coverage * 15
-            + contextual_coverage * 5
-            + evidence_depth * 10
+            required_coverage * config.required_weight * 100
+            + preferred_coverage * config.preferred_weight * 100
+            + contextual_coverage * config.contextual_weight * 100
+            + evidence_depth * config.evidence_depth_weight * 100
         )
-        missing_requirement_penalty = missing_ratio * 10
+        missing_requirement_penalty = (
+            missing_ratio * config.missing_required_penalty
+        )
     else:
         # Safe fallback for unusually unstructured JDs with no detected
         # mandatory requirements.
@@ -226,6 +230,7 @@ def score_and_rank_candidates(
         str,
         list[RequirementMatch],
     ],
+    config: ScoringConfig = SCORING_CONFIG,
 ) -> list[CandidateEvaluation]:
     evaluations = [
         score_candidate(
@@ -236,6 +241,7 @@ def score_and_rank_candidates(
                 candidate_id,
                 [],
             ),
+            config=config,
         )
         for candidate_id, document
         in candidates.items()

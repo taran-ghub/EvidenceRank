@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from math import exp
 
 import numpy as np
 from rank_bm25 import BM25Okapi
@@ -13,10 +14,9 @@ from src.schemas import (
     ParsedJobDescription,
     RequirementMatch,
 )
+from src.config import MATCHING_CONFIG, MatchingConfig
 from src.skill_catalog import alias_appears_in_text
 
-
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 _MODEL = None
 
@@ -47,26 +47,11 @@ STOPWORDS = {
 }
 
 
-SECTION_QUALITY = {
-    "header": 0.20,
-    "summary": 0.45,
-    "skills": 0.40,
-    "coursework": 0.55,
-    "certifications": 0.60,
-    "education": 0.60,
-    "projects": 0.78,
-    "experience": 0.88,
-    "achievements": 0.72,
-    "leadership": 0.72,
-    "other": 0.45,
-}
-
-
 def get_embedding_model() -> SentenceTransformer:
     global _MODEL
 
     if _MODEL is None:
-        _MODEL = SentenceTransformer(MODEL_NAME)
+        _MODEL = SentenceTransformer(MATCHING_CONFIG.model_name)
 
     return _MODEL
 
@@ -101,17 +86,18 @@ def calculate_evidence_quality(
     section: str,
     contains_action_verb: bool,
     contains_number: bool,
+    config: MatchingConfig = MATCHING_CONFIG,
 ) -> float:
-    quality = SECTION_QUALITY.get(
+    quality = config.section_quality.get(
         section,
         0.45,
     )
 
     if contains_action_verb:
-        quality += 0.08
+        quality += config.action_verb_bonus
 
     if contains_number:
-        quality += 0.06
+        quality += config.numeric_evidence_bonus
 
     if (
         requirement.category == "education"
@@ -129,7 +115,7 @@ def calculate_evidence_quality(
         requirement.category == "technical_skill"
         and section in {"projects", "experience"}
     ):
-        quality += 0.04
+        quality += config.relevant_section_bonus
 
     if (
         requirement.category == "soft_skill"
@@ -139,7 +125,7 @@ def calculate_evidence_quality(
             "leadership",
         }
     ):
-        quality += 0.04
+        quality += config.relevant_section_bonus
 
     return round(
         min(max(quality, 0.0), 1.0),
@@ -151,14 +137,15 @@ def status_from_score(
     combined_score: float,
     requirement: JobRequirement,
     has_direct_or_related_match: bool,
+    config: MatchingConfig = MATCHING_CONFIG,
 ) -> str:
-    if combined_score >= 0.55:
+    if combined_score >= config.strong_threshold:
         return "strong"
 
-    if combined_score >= 0.35:
+    if combined_score >= config.partial_threshold:
         return "partial"
 
-    if combined_score >= 0.18:
+    if combined_score >= config.weak_threshold:
         if (
             requirement.category == "technical_skill"
             and not has_direct_or_related_match
@@ -174,8 +161,10 @@ class HybridMatcher:
     def __init__(
         self,
         candidates: dict[str, NormalizedDocument],
+        config: MatchingConfig = MATCHING_CONFIG,
     ) -> None:
         self.candidates = candidates
+        self.config = config
 
         self.all_spans = []
         self.span_candidate_ids: list[str] = []
@@ -207,12 +196,15 @@ class HybridMatcher:
                 "No usable evidence spans were provided."
             )
 
-        tokenized_corpus = [
-            tokenize(span.normalized_text)
-            for span in self.all_spans
-        ]
-
-        self.bm25 = BM25Okapi(tokenized_corpus)
+        # Keep lexical statistics candidate-local. A candidate's score must not
+        # change merely because an unrelated resume is added to the batch.
+        self.candidate_bm25: dict[str, BM25Okapi] = {}
+        for candidate_id, indexes in self.candidate_span_indexes.items():
+            corpus = [
+                tokenize(self.all_spans[index].normalized_text)
+                for index in indexes
+            ]
+            self.candidate_bm25[candidate_id] = BM25Okapi(corpus)
 
         model = get_embedding_model()
 
@@ -246,24 +238,6 @@ class HybridMatcher:
             keyword_query_text
         )
 
-        raw_bm25_scores = np.asarray(
-            self.bm25.get_scores(keyword_query),
-            dtype=float,
-        )
-
-        maximum_bm25 = float(
-            raw_bm25_scores.max()
-        )
-
-        if maximum_bm25 > 0:
-            bm25_scores = (
-                raw_bm25_scores / maximum_bm25
-            )
-        else:
-            bm25_scores = np.zeros_like(
-                raw_bm25_scores
-            )
-
         model = get_embedding_model()
 
         requirement_embedding = model.encode(
@@ -294,9 +268,23 @@ class HybridMatcher:
                 )
             )
 
+            candidate_bm25 = self.candidate_bm25.get(candidate_id)
+            raw_candidate_bm25 = np.asarray(
+                candidate_bm25.get_scores(keyword_query)
+                if candidate_bm25 is not None
+                else [],
+                dtype=float,
+            )
+            # Fixed saturation keeps values in [0, 1) without normalizing
+            # against another candidate or the strongest span in the batch.
+            candidate_bm25_scores = np.asarray(
+                [1.0 - exp(-max(score, 0.0)) for score in raw_candidate_bm25],
+                dtype=float,
+            )
+
             best_match = None
 
-            for index in candidate_indexes:
+            for local_index, index in enumerate(candidate_indexes):
                 span = self.all_spans[index]
 
                 matched_terms = find_matching_terms(
@@ -315,14 +303,12 @@ class HybridMatcher:
                     else 0.0
                 )
 
-                bm25_score = float(
-                    bm25_scores[index]
-                )
+                bm25_score = float(candidate_bm25_scores[local_index])
 
                 if requirement.exact_terms:
                     keyword_score = (
-                        0.70 * exact_score
-                        + 0.30 * bm25_score
+                        self.config.exact_term_weight * exact_score
+                        + self.config.lexical_weight * bm25_score
                     )
                 else:
                     keyword_score = bm25_score
@@ -346,15 +332,16 @@ class HybridMatcher:
                         contains_number=(
                             span.contains_number
                         ),
+                        config=self.config,
                     )
                 )
 
                 combined_score = (
                     evidence_quality
                     * (
-                        0.45 * semantic_score
-                        + 0.35 * keyword_score
-                        + 0.20 * relation_score
+                        self.config.semantic_weight * semantic_score
+                        + self.config.keyword_weight * keyword_score
+                        + self.config.relation_weight * relation_score
                     )
                 )
 
@@ -371,7 +358,7 @@ class HybridMatcher:
                 ):
                     combined_score = min(
                         combined_score,
-                        0.34,
+                        self.config.technical_semantic_only_cap,
                     )
 
                 combined_score = round(
@@ -383,6 +370,7 @@ class HybridMatcher:
                     combined_score,
                     requirement,
                     has_direct_or_related_match,
+                    self.config,
                 )
 
                 current_match = RequirementMatch(
