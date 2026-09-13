@@ -246,3 +246,47 @@ Designed marketing graphics and mobile interface mockups.
     assert second_candidate["rank"] == 2
     assert first_candidate["final_score"] > second_candidate["final_score"]
     assert first_candidate["requirement_matches"]
+
+def test_rank_does_not_expose_internal_extraction_errors(
+    monkeypatch,
+) -> None:
+    import src.api as api_module
+
+    private_error = "PRIVATE_INTERNAL_PATH_OR_LIBRARY_ERROR"
+
+    def broken_extractor(_path):
+        raise RuntimeError(private_error)
+
+    monkeypatch.setattr(
+        api_module,
+        "extract_document",
+        broken_extractor,
+    )
+
+    response = client.post(
+        "/rank",
+        files=[
+            (
+                "job_description",
+                (
+                    "job.txt",
+                    BytesIO(b"Looking for a Python developer"),
+                    "text/plain",
+                ),
+            ),
+            (
+                "resumes",
+                (
+                    "resume.txt",
+                    BytesIO(b"Python developer"),
+                    "text/plain",
+                ),
+            ),
+        ],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Could not read the job description."
+    )
+    assert private_error not in response.text

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from src.scorer import score_and_rank_candidates
 ALLOWED_EXTENSIONS = UPLOAD_CONFIG.allowed_extensions
 MAX_RESUMES = UPLOAD_CONFIG.max_resumes
 MAX_FILE_SIZE = UPLOAD_CONFIG.max_file_size_bytes
+
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -183,11 +186,15 @@ async def rank_resumes(
 
         try:
             extracted_job = extract_document(job_path)
-        except Exception as exc:
+        except Exception:
+            logger.exception(
+                "Job-description extraction crashed for %s.",
+                job_filename,
+            )
             raise HTTPException(
                 status_code=422,
-                detail=f"Could not read the job description: {exc}",
-            ) from exc
+                detail="Could not read the job description.",
+            ) from None
 
         if not extracted_job.extraction_success:
             raise HTTPException(
@@ -200,11 +207,15 @@ async def rank_resumes(
 
         try:
             parsed_job = parse_job_description(extracted_job)
-        except Exception as exc:
+        except Exception:
+            logger.exception(
+                "Job-description parsing crashed for %s.",
+                job_filename,
+            )
             raise HTTPException(
                 status_code=422,
-                detail=f"Could not parse the job description: {exc}",
-            ) from exc
+                detail="Could not parse the job description.",
+            ) from None
 
         if not parsed_job.parsing_success:
             raise HTTPException(
@@ -298,13 +309,18 @@ async def rank_resumes(
             except HTTPException:
                 raise
 
-            except Exception as exc:
+            except Exception:
+                logger.exception(
+                    "Resume processing crashed for candidate %s (%s).",
+                    candidate_id,
+                    original_filename,
+                )
                 rejected_files.append(
                     {
                         "candidate_id": candidate_id,
                         "filename": original_filename,
                         "stage": "processing",
-                        "reason": str(exc),
+                        "reason": "Unexpected resume processing failure.",
                         "warnings": [],
                     }
                 )
@@ -325,11 +341,12 @@ async def rank_resumes(
         try:
             matcher = HybridMatcher(candidates)
             matches = matcher.match_all(parsed_job)
-        except Exception as exc:
+        except Exception:
+            logger.exception("Candidate matching crashed.")
             raise HTTPException(
                 status_code=500,
-                detail=f"Candidate matching failed: {exc}",
-            ) from exc
+                detail="Candidate matching failed.",
+            ) from None
 
         # ---------------------------------------------------------
         # 4. Score and rank candidates
@@ -341,11 +358,12 @@ async def rank_resumes(
                 parsed_job,
                 matches,
             )
-        except Exception as exc:
+        except Exception:
+            logger.exception("Candidate scoring crashed.")
             raise HTTPException(
                 status_code=500,
-                detail=f"Candidate scoring failed: {exc}",
-            ) from exc
+                detail="Candidate scoring failed.",
+            ) from None
 
         # ---------------------------------------------------------
         # 5. Build explainable results
