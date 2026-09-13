@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
+from src.config import MatchingConfig, ScoringConfig
 from src.document_extractor import extract_document
 from src.jd_parser import parse_job_description
 from src.normalizer import normalize_document
@@ -207,3 +210,105 @@ def test_required_coverage_dominates_preferred_bonus() -> None:
 
     assert ranking[0].candidate_id == "candidate_required"
     assert ranking[0].required_coverage > ranking[1].required_coverage
+
+
+def test_invalid_weight_configuration_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must sum to 1.0"):
+        MatchingConfig(
+            semantic_weight=0.8,
+            keyword_weight=0.8,
+            relation_weight=0.8,
+        )
+
+    with pytest.raises(ValueError, match="must sum to 1.0"):
+        ScoringConfig(required_weight=0.9)
+
+
+class DummyEmbeddingModel:
+    def encode(self, texts, **kwargs):
+        vectors = []
+        for text in texts:
+            normalized = text.casefold()
+            vector = np.asarray(
+                [
+                    len(normalized),
+                    sum(character in "aeiou" for character in normalized),
+                    sum(character.isalpha() for character in normalized),
+                ],
+                dtype=float,
+            )
+            norm = np.linalg.norm(vector)
+            vectors.append(vector / norm if norm else vector)
+        return np.asarray(vectors)
+
+
+def make_span(span_id: str, text: str):
+    from src.schemas import EvidenceSpan
+
+    return EvidenceSpan(
+        span_id=span_id,
+        filename="candidate.pdf",
+        page_number=1,
+        section="projects",
+        original_text=text,
+        normalized_text=text.casefold(),
+        word_count=len(text.split()),
+        contains_action_verb=True,
+    )
+
+
+def test_candidate_score_is_invariant_to_unrelated_pool_changes(monkeypatch) -> None:
+    import src.matcher as matcher_module
+
+    monkeypatch.setattr(
+        matcher_module,
+        "get_embedding_model",
+        lambda: DummyEmbeddingModel(),
+    )
+
+    candidate_a = NormalizedDocument(
+        filename="candidate_a.pdf",
+        spans=[
+            make_span("a1", "Improved distributed systems reliability"),
+            make_span("a2", "Built a customer-facing dashboard"),
+            make_span("a3", "Documented deployment procedures"),
+        ],
+        total_spans=3,
+        normalization_success=True,
+    )
+    unrelated_candidate = NormalizedDocument(
+        filename="candidate_b.pdf",
+        spans=[
+            make_span(
+                "b1",
+                "Distributed systems reliability reliability reliability",
+            )
+        ],
+        total_spans=1,
+        normalization_success=True,
+    )
+    requirement = JobRequirement(
+        requirement_id="req_reliability",
+        original_text="Experience improving distributed systems reliability",
+        normalized_text="experience improving distributed systems reliability",
+        canonical_label="Distributed systems reliability",
+        priority="required",
+        category="responsibility",
+        weight=1.5,
+        exact_terms=[],
+        related_terms=[],
+        evidence_expected="experience",
+    )
+
+    score_alone = matcher_module.HybridMatcher(
+        {"candidate_a": candidate_a}
+    ).match_requirement(requirement)["candidate_a"].combined_score
+
+    score_with_other_candidate = matcher_module.HybridMatcher(
+        {
+            "candidate_a": candidate_a,
+            "candidate_b": unrelated_candidate,
+        }
+    ).match_requirement(requirement)["candidate_a"].combined_score
+
+    assert score_alone == score_with_other_candidate
