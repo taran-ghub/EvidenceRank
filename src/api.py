@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.config import UPLOAD_CONFIG
 from src.document_extractor import extract_document
 from src.jd_parser import parse_job_description
 from src.matcher import HybridMatcher
@@ -13,9 +14,10 @@ from src.normalizer import normalize_document
 from src.scorer import score_and_rank_candidates
 
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".xml"}
-MAX_RESUMES = 50
-MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB per file
+# Backwards-compatible names used by tests and API metadata.
+ALLOWED_EXTENSIONS = UPLOAD_CONFIG.allowed_extensions
+MAX_RESUMES = UPLOAD_CONFIG.max_resumes
+MAX_FILE_SIZE = UPLOAD_CONFIG.max_file_size_bytes
 
 
 app = FastAPI(
@@ -47,7 +49,24 @@ def validate_filename(filename: str | None) -> str:
             detail="An uploaded file has no filename.",
         )
 
-    safe_name = Path(filename).name
+    # Normalize Windows and POSIX separators on every operating system.
+    safe_name = Path(filename.replace("\\", "/")).name.strip()
+
+    if not safe_name or safe_name in {".", ".."}:
+        raise HTTPException(
+            status_code=400,
+            detail="An uploaded file has an invalid filename.",
+        )
+
+    if len(safe_name) > UPLOAD_CONFIG.max_filename_length:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "An uploaded filename is too long. "
+                f"The maximum is {UPLOAD_CONFIG.max_filename_length} characters."
+            ),
+        )
+
     extension = Path(safe_name).suffix.lower()
 
     if extension not in ALLOWED_EXTENSIONS:
@@ -70,7 +89,9 @@ async def save_upload(upload: UploadFile, destination: Path) -> None:
     try:
         with destination.open("wb") as output_file:
             while True:
-                chunk = await upload.read(1024 * 1024)
+                chunk = await upload.read(
+                    UPLOAD_CONFIG.read_chunk_size_bytes
+                )
 
                 if not chunk:
                     break
@@ -80,7 +101,10 @@ async def save_upload(upload: UploadFile, destination: Path) -> None:
                 if total_size > MAX_FILE_SIZE:
                     raise HTTPException(
                         status_code=413,
-                        detail=f"{upload.filename} is larger than 15 MB.",
+                        detail=(
+                            f"{upload.filename} is larger than "
+                            f"{UPLOAD_CONFIG.max_file_size_mb} MB."
+                        ),
                     )
 
                 output_file.write(chunk)

@@ -84,5 +84,42 @@ class ScoringConfig:
             raise ValueError("Missing-required penalty cannot be negative.")
 
 
+@dataclass(frozen=True)
+class UploadConfig:
+    allowed_extensions: frozenset[str] = frozenset(
+        {".pdf", ".docx", ".txt", ".xml"}
+    )
+    max_resumes: int = 50
+    max_file_size_bytes: int = 15 * 1024 * 1024
+    read_chunk_size_bytes: int = 1024 * 1024
+    max_filename_length: int = 180
+
+    def __post_init__(self) -> None:
+        if not self.allowed_extensions:
+            raise ValueError("At least one upload extension must be allowed.")
+
+        if any(
+            not extension.startswith(".") or extension != extension.lower()
+            for extension in self.allowed_extensions
+        ):
+            raise ValueError(
+                "Upload extensions must be lowercase and start with a dot."
+            )
+
+        for name in (
+            "max_resumes",
+            "max_file_size_bytes",
+            "read_chunk_size_bytes",
+            "max_filename_length",
+        ):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be greater than zero.")
+
+    @property
+    def max_file_size_mb(self) -> int:
+        return self.max_file_size_bytes // (1024 * 1024)
+
+
 MATCHING_CONFIG = MatchingConfig()
 SCORING_CONFIG = ScoringConfig()
+UPLOAD_CONFIG = UploadConfig()
