@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Python environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+conda-env/
+environment.yml.bak
+
+# Hugging Face and model caches
+.cache/
+huggingface/
+models/
+*.onnx
+
+# Private resume and job-description data
+data/training_resumes/
+data/incoming/*
+data/cache/
+data/test_resumes/
+uploads/
+
+# Keep empty data-directory placeholders
+!data/incoming/.gitkeep
+!data/cache/.gitkeep
+
+# Frontend dependencies and builds
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# Generated reports and temporary files
+reports/
+output/
+tmp/
+*.log
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+
+# Local secrets
+*.pem
+*.key
+secrets.*
