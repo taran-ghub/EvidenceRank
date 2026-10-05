@@ -88,19 +88,19 @@ export default function ArchitectureModal({ open, onClose }) {
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  Blind literal matches; easily tricked by resume keyword-stuffing.
+                  Primarily relies on literal term matching.
                 </Typography>
               </Box>
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  Fails on synonyms (e.g. misses "Postgres" if JD specifies "PostgreSQL").
+                  Synonyms require explicit configuration (for example, Postgres and PostgreSQL).
                 </Typography>
               </Box>
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  Zero verification of work experience depth or quantifiable metrics.
+                  Often provides limited context about where a matched term appeared.
                 </Typography>
               </Box>
             </Stack>
@@ -123,19 +123,19 @@ export default function ArchitectureModal({ open, onClose }) {
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  Transmits candidate PII to external third-party APIs (GDPR risk).
+                  May send resume data to an external provider, depending on deployment.
                 </Typography>
               </Box>
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  Hallucinates credentials and yields non-reproducible rankings.
+                  Results can vary with the selected model and generation settings.
                 </Typography>
               </Box>
               <Box display="flex" gap={1}>
                 <CancelRounded sx={{ fontSize: 17, color: "#b85145" }} />
                 <Typography variant="caption" color="#70675e">
-                  High per-token operational costs and API network latency.
+                  Introduces network, provider, latency, and usage-cost considerations.
                 </Typography>
               </Box>
             </Stack>
@@ -154,7 +154,7 @@ export default function ArchitectureModal({ open, onClose }) {
           >
             <Chip
               size="small"
-              label="Optimal"
+              label="Current approach"
               sx={{ position: "absolute", top: 10, right: 10, height: 20, fontSize: 10, fontWeight: 700, bgcolor: "#b4532a", color: "#fffdf9" }}
             />
             <Typography variant="subtitle2" fontWeight={750} color="#813718" mb={1}>
@@ -164,7 +164,7 @@ export default function ArchitectureModal({ open, onClose }) {
               <Box display="flex" gap={1}>
                 <CheckCircleRounded sx={{ fontSize: 17, color: "#56805f" }} />
                 <Typography variant="caption" color="#1e1b4b">
-                  100% On-Device & Zero PII Leakage. Completely offline-capable.
+                  Resume analysis runs locally after the required models and dependencies are installed.
                 </Typography>
               </Box>
               <Box display="flex" gap={1}>
@@ -176,7 +176,7 @@ export default function ArchitectureModal({ open, onClose }) {
               <Box display="flex" gap={1}>
                 <CheckCircleRounded sx={{ fontSize: 17, color: "#56805f" }} />
                 <Typography variant="caption" color="#1e1b4b">
-                  Evidence-aware: Rewards projects & metrics over raw skill lists.
+                  Evidence-aware: weights projects, experience, action verbs, and metrics.
                 </Typography>
               </Box>
             </Stack>
@@ -233,7 +233,7 @@ export default function ArchitectureModal({ open, onClose }) {
                   BM25 Lexical Matching (35%)
                 </Typography>
                 <Typography variant="caption" color="#70675e">
-                  Verifies that specific technical technologies, libraries, and frameworks requested are explicitly verified in candidate documents.
+                  Checks whether requested technologies, libraries, and frameworks appear in candidate documents.
                 </Typography>
               </Box>
             </Box>
@@ -257,7 +257,7 @@ export default function ArchitectureModal({ open, onClose }) {
                   Evidence Quality Multiplier
                 </Typography>
                 <Typography variant="caption" color="#70675e">
-                  Penalizes raw keyword lists and rewards evidence located in Work Experience and Projects featuring action verbs and quantifiable metrics.
+                  Weights evidence using its resume section, action verbs, and quantifiable metrics.
                 </Typography>
               </Box>
             </Box>

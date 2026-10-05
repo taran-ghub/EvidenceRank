@@ -321,7 +321,7 @@ export default function UploadStudio({
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <CloudUploadOutlined sx={{ color: "#657153", fontSize: 22 }} />
               <Typography variant="body2" fontWeight={700} color="#29231e">
-                Select or drag applicant resumes (batch upload)
+                Select applicant resumes (batch upload)
               </Typography>
             </Stack>
             <Typography variant="caption" color="text.secondary">
@@ -387,7 +387,7 @@ export default function UploadStudio({
         sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}
       >
         <Typography variant="caption" color="#70675e" fontWeight={500}>
-          🔒 100% on-device local execution • Zero candidate data is transmitted outside your environment
+          🔒 Resume files are sent only to your configured local EvidenceRank API
         </Typography>
 
         <Button

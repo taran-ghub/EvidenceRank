@@ -208,16 +208,14 @@ export default function CandidateList({
   const filtered = rankings.filter((candidate) => {
     const matchesSearch = (candidate.filename || "").toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
-    if (filterMode === "shortlist") {
-      return (candidate.final_score || 0) >= 70 && !candidate.missing_required?.length;
-    }
+    if (filterMode === "no-gaps") return !candidate.missing_required?.length;
     if (filterMode === "gaps") return candidate.missing_required?.length > 0;
     return true;
   });
 
   const filterOptions = [
     ["all", `All ${rankings.length}`],
-    ["shortlist", "Shortlist"],
+    ["no-gaps", "No required gaps"],
     ["gaps", "Has gaps"]
   ];
 

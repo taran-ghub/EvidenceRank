@@ -86,15 +86,8 @@ export default function KpiSummary({ results }) {
   const totalCandidates = results.summary?.ranked_resumes ?? results.rankings?.length ?? 0;
   const jd = results.job_description;
   const topCandidate = results.rankings?.[0];
-  const shortlistedCount =
-    results.rankings?.filter(
-      (candidate) =>
-        (candidate.final_score || 0) >= 70 &&
-        (!candidate.missing_required || candidate.missing_required.length === 0)
-    ).length || 0;
-  const shortlistPercent = totalCandidates
-    ? Math.round((shortlistedCount / totalCandidates) * 100)
-    : 0;
+  const uploadedCandidates = results.summary?.uploaded_resumes ?? totalCandidates;
+  const rejectedCandidates = results.summary?.rejected_resumes ?? results.rejected_files?.length ?? 0;
 
   let totalMatches = 0;
   let highQualityMatches = 0;
@@ -109,9 +102,9 @@ export default function KpiSummary({ results }) {
       }
     });
   });
-  const integrityIndex = totalMatches
+  const workProjectEvidenceRate = totalMatches
     ? Math.round((highQualityMatches / totalMatches) * 100)
-    : 88;
+    : 0;
 
   return (
     <Paper
@@ -136,7 +129,7 @@ export default function KpiSummary({ results }) {
         value={totalCandidates}
       >
         <Typography variant="caption" sx={{ color: "#4f6b50", display: "block", mt: 0.8, fontWeight: 700 }}>
-          {shortlistedCount} shortlisted · {shortlistPercent}% of batch
+          {uploadedCandidates} uploaded · {rejectedCandidates} rejected
         </Typography>
       </MetricCell>
 
@@ -176,9 +169,9 @@ export default function KpiSummary({ results }) {
         index={3}
         icon={metrics.integrity.icon}
         tone={metrics.integrity}
-        label="EVIDENCE INTEGRITY"
-        value={`${integrityIndex}%`}
-        detail="Supported by experience and project evidence"
+        label="HIGH-QUALITY EVIDENCE"
+        value={`${workProjectEvidenceRate}%`}
+        detail="Matches with strong evidence quality or work/project context"
       />
     </Paper>
   );

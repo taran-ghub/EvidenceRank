@@ -94,7 +94,7 @@ export default function PipelineAnalytics({ results }) {
             </Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary" display="block" mb={2}>
-            Overall verified evidence scores across all ranked candidates.
+            Overall evidence fit scores across all ranked candidates.
           </Typography>
 
           <Box sx={{ width: "100%", height: 260 }}>
@@ -121,7 +121,7 @@ export default function PipelineAnalytics({ results }) {
                   }}
                   formatter={(value, name) => [
                     `${value}%`,
-                    name === "score" ? "Evidence Score" : "Must-Have Coverage"
+                    name === "score" ? "Evidence Fit Score" : "Must-Have Coverage"
                   ]}
                 />
                 <Bar dataKey="score" radius={[5, 5, 0, 0]}>

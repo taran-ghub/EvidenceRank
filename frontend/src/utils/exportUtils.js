@@ -20,7 +20,7 @@ export function downloadCsvShortlist(results, filename = "EvidenceRank_candidate
   const headers = [
     "Rank",
     "Candidate Filename",
-    "Evidence Score",
+    "Evidence Fit Score",
     "Required Coverage (%)",
     "Preferred Coverage (%)",
     "Mandatory Gaps Count",
@@ -60,12 +60,12 @@ export async function copySummaryToClipboard(results, candidate) {
 === EvidenceRank Candidate Audit ===
 Candidate: ${candidate.filename}
 Rank: #${candidate.rank} of ${results.rankings?.length || 1}
-Evidence Score: ${Number(candidate.final_score || 0).toFixed(1)} / 100
+Evidence Fit Score: ${Number(candidate.final_score || 0).toFixed(1)} / 100
 Must-Have Coverage: ${Math.round((candidate.required_coverage || 0) * 100)}%
 Preferred Coverage: ${Math.round((candidate.preferred_coverage || 0) * 100)}%
-Mandatory Gaps: ${candidate.missing_required?.length ? candidate.missing_required.join(", ") : "None (100% Satisfied)"}
+Mandatory Gaps: ${candidate.missing_required?.length ? candidate.missing_required.join(", ") : "None detected"}
 Strong Matches: ${candidate.strong_matches?.join(", ") || "None"}
-Audit Trail: Verified via local hybrid semantic + lexical analysis.
+Audit Trail: Generated through local hybrid semantic and lexical analysis.
 ====================================
 `.trim();
 

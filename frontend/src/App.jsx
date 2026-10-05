@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import {
   ThemeProvider,
@@ -12,7 +12,9 @@ import {
   Typography,
   Button,
   Paper,
-  Collapse
+  Collapse,
+  Alert,
+  CircularProgress
 } from "@mui/material";
 import {
   FactCheckRounded,
@@ -30,14 +32,26 @@ import UploadStudio from "./components/UploadStudio";
 import KpiSummary from "./components/KpiSummary";
 import CandidateList from "./components/CandidateList";
 import CandidateAuditView from "./components/CandidateAuditView";
-import CandidateComparison from "./components/CandidateComparison";
-import PipelineAnalytics from "./components/PipelineAnalytics";
 import ArchitectureModal from "./components/ArchitectureModal";
 
 // Demo Data
 import { DEMO_RESULTS } from "./data/demoData";
 
-const API_URL = "http://127.0.0.1:8000";
+const CandidateComparison = lazy(() => import("./components/CandidateComparison"));
+const PipelineAnalytics = lazy(() => import("./components/PipelineAnalytics"));
+
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+function ViewLoadingFallback() {
+  return (
+    <Paper variant="outlined" sx={{ p: 5, textAlign: "center", borderRadius: 3 }}>
+      <CircularProgress size={26} />
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+        Loading this view…
+      </Typography>
+    </Paper>
+  );
+}
 
 const theme = createTheme({
   palette: {
@@ -141,10 +155,9 @@ export default function App() {
     finalResumeFiles.forEach((file) => body.append("resumes", file));
 
     try {
-      const response = await axios.post(`${API_URL}/rank`, body, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      const response = await axios.post(`${API_URL}/rank`, body);
       const data = response.data;
+      setBackendOnline(true);
       setResults(data);
       if (data.rankings && data.rankings.length > 0) {
         setSelectedId(data.rankings[0].candidate_id);
@@ -328,6 +341,14 @@ export default function App() {
               {/* Executive KPI Summary Cards */}
               <KpiSummary results={results} />
 
+              {results.rejected_files?.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2.25, borderRadius: 2.5 }}>
+                  {results.rejected_files.length} uploaded resume
+                  {results.rejected_files.length === 1 ? " was" : "s were"} not ranked. {" "}
+                  {results.rejected_files.map((file) => file.filename).join(", ")}
+                </Alert>
+              )}
+
               {/* View Switcher Tabs */}
               <Paper
                 variant="outlined"
@@ -421,17 +442,23 @@ export default function App() {
 
               {/* Tab 2: Head-to-Head Comparison */}
               {activeTab === "compare" && (
-                <CandidateComparison
-                  rankings={results.rankings}
-                  comparedIds={comparedIds}
-                  onRemoveCompare={handleRemoveCompare}
-                  onClearCompare={handleClearCompare}
-                  requirementsById={requirementsById}
-                />
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <CandidateComparison
+                    rankings={results.rankings}
+                    comparedIds={comparedIds}
+                    onRemoveCompare={handleRemoveCompare}
+                    onClearCompare={handleClearCompare}
+                    requirementsById={requirementsById}
+                  />
+                </Suspense>
               )}
 
               {/* Tab 3: Pipeline Visual Analytics */}
-              {activeTab === "analytics" && <PipelineAnalytics results={results} />}
+              {activeTab === "analytics" && (
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <PipelineAnalytics results={results} />
+                </Suspense>
+              )}
             </Box>
           )}
         </Container>

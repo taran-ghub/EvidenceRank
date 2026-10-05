@@ -41,8 +41,7 @@ const priorityWeightMap = {
 
 function LargeScoreGauge({ score, size = 84 }) {
   const value = Math.max(0, Math.min(100, Number(score || 0)));
-  const strokeColor =
-    value >= 80 ? "#56805f" : value >= 65 ? "#657153" : value >= 50 ? "#c18436" : "#b85145";
+  const strokeColor = "#b4532a";
 
   return (
     <Box
@@ -144,16 +143,16 @@ export default function CandidateAuditView({
     if (ok) setCopySuccess(true);
   };
 
-  // Generate dynamic, high-conviction verdict for candidate
+  // Summarize model output without turning it into an automated hiring decision.
   let verdictType;
-  if (candidate.rank === 1 && gapsCount === 0) {
-    verdictType = "interview";
-  } else if (candidate.filename.includes("Keyword_Stuffer") || (candidate.normalization_warnings && candidate.normalization_warnings.length > 0)) {
-    verdictType = "stuffing";
-  } else if (gapsCount > 0) {
+  if (gapsCount > 0) {
     verdictType = "gap";
+  } else if (candidate.rank === 1) {
+    verdictType = "leading";
+  } else if (candidate.normalization_warnings?.length > 0) {
+    verdictType = "warning";
   } else {
-    verdictType = "junior";
+    verdictType = "complete";
   }
 
   return (
@@ -178,7 +177,7 @@ export default function CandidateAuditView({
                 {candidate.rank === 1 ? (
                   <Chip
                     icon={<WorkspacePremiumRounded sx={{ fontSize: 14, color: "#fffdf9 !important" }} />}
-                    label="Rank #1 • Top Pick"
+                    label="Rank #1 • Highest score"
                     sx={{
                       height: 22,
                       fontSize: 11,
@@ -212,7 +211,7 @@ export default function CandidateAuditView({
               </Typography>
 
               <Typography variant="caption" color="text.secondary" mt={0.2} display="block">
-                {candidate.evidence_span_count || 0} normalized resume spans • Verified locally
+                {candidate.evidence_span_count || 0} normalized resume spans • Processed locally
               </Typography>
             </Box>
           </Stack>
@@ -267,7 +266,7 @@ export default function CandidateAuditView({
 
         {/* HIGH IMPACT DECISION VERDICT (The Convincing Proof Box) */}
         <Box mt={1.25}>
-          {verdictType === "interview" && (
+          {verdictType === "leading" && (
             <Paper
               elevation={0}
               sx={{
@@ -281,10 +280,10 @@ export default function CandidateAuditView({
                 <CheckCircleRounded sx={{ color: "#56805f", fontSize: 20, mt: 0.15, flexShrink: 0 }} />
                 <Box>
                   <Typography variant="subtitle2" fontWeight={800} color="#365d3e">
-                    Recommended for interview
+                    Highest-ranked by model score
                   </Typography>
                   <Typography variant="body2" color="#4d694f" fontSize={13} sx={{ lineHeight: 1.45, mt: 0.25 }}>
-                    {requiredCoverage}% must-have coverage, supported by {candidate.evidence_span_count || 0} verified resume spans.
+                    {requiredCoverage}% must-have coverage, supported by {candidate.evidence_span_count || 0} traceable resume spans. Human review is still required.
                   </Typography>
                 </Box>
               </Stack>
@@ -315,7 +314,7 @@ export default function CandidateAuditView({
             </Paper>
           )}
 
-          {verdictType === "stuffing" && (
+          {verdictType === "warning" && (
             <Paper
               elevation={0}
               sx={{
@@ -329,10 +328,11 @@ export default function CandidateAuditView({
                 <TrendingDownRounded sx={{ color: "#c18436", fontSize: 20, mt: 0.15, flexShrink: 0 }} />
                 <Box>
                   <Typography variant="subtitle2" fontWeight={800} color="#8c5c20">
-                    Evidence safeguards triggered
+                    Processing notes available
                   </Typography>
                   <Typography variant="body2" color="#9c6c32" fontSize={13} sx={{ lineHeight: 1.45, mt: 0.25 }}>
-                    Keyword-dense content lacks supporting project context. The quality adjustment is reflected in the {candidate.final_score.toFixed(1)} score.
+                    {candidate.normalization_warnings.length} normalization warning
+                    {candidate.normalization_warnings.length === 1 ? " was" : "s were"} recorded. Review the extracted evidence where needed.
                   </Typography>
                 </Box>
               </Stack>
@@ -518,7 +518,7 @@ export default function CandidateAuditView({
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.6 }}>
                       <FormatQuoteRounded sx={{ color: "#b4532a", fontSize: 18 }} />
                       <Typography variant="caption" color="#93441f" fontWeight={750} letterSpacing={0.5}>
-                        VERIFIED EVIDENCE FROM RESUME
+                        SUPPORTING RESUME EVIDENCE
                       </Typography>
                     </Stack>
 

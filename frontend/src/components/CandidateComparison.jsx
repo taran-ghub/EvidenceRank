@@ -127,7 +127,7 @@ export default function CandidateComparison({
             {/* Top Metrics Row: Final Score */}
             <TableRow sx={{ bgcolor: "#faf5ff" }}>
               <TableCell sx={{ color: "#581c87", fontWeight: 700, borderColor: "#e5ddd1" }}>
-                Overall Evidence Score
+                Overall Evidence Fit Score
               </TableCell>
               {comparedCandidates.map((c) => (
                 <TableCell key={c.candidate_id} sx={{ borderColor: "#e5ddd1" }}>

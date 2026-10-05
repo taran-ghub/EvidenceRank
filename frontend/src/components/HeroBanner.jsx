@@ -13,7 +13,7 @@ export default function HeroBanner() {
       <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, mb: 2 }}>
         <Chip
           icon={<LockOutlined sx={{ fontSize: 13, color: "#b4532a !important" }} />}
-          label="Deterministic • 100% Local AI • Full Source Audit"
+          label="Local analysis • Reproducible scoring • Source audit"
           size="small"
           sx={{
             px: 1,
@@ -41,7 +41,7 @@ export default function HeroBanner() {
           mx: "auto"
         }}
       >
-        Hire by verified proof.{" "}
+        Rank with traceable evidence.{" "}
         <Box
           component="span"
           sx={{
@@ -113,10 +113,10 @@ export default function HeroBanner() {
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2" fontWeight={750} color="#29231e" sx={{ lineHeight: 1.2 }}>
-              100% On-Device
+              Local Processing
             </Typography>
             <Typography variant="caption" color="#70675e" display="block" mt={0.3}>
-              Zero cloud PII leaks. Fully private.
+              Files are analyzed by your configured local API.
             </Typography>
           </Box>
         </Paper>
@@ -153,10 +153,10 @@ export default function HeroBanner() {
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2" fontWeight={750} color="#29231e" sx={{ lineHeight: 1.2 }}>
-              Anti-Stuffing Check
+              Evidence Depth
             </Typography>
             <Typography variant="caption" color="#70675e" display="block" mt={0.3}>
-              Penalizes buzzword lists.
+              Rewards project and work context.
             </Typography>
           </Box>
         </Paper>
@@ -193,7 +193,7 @@ export default function HeroBanner() {
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2" fontWeight={750} color="#29231e" sx={{ lineHeight: 1.2 }}>
-              Sentence-Level Proof
+              Sentence-Level Evidence
             </Typography>
             <Typography variant="caption" color="#70675e" display="block" mt={0.3}>
               Page & section citations.
